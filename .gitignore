@@ -1,0 +1,50 @@
+# Markdown — ignore all except public-facing docs
+*.md
+!README.md
+!CHANGELOG.md
+!docs/*.md
+
+# Editor / OS
+*.log
+*.bak
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.code-workspace
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test / coverage
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Cache
+.cache/
+
+# Env files
+.env
+.env.*

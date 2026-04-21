@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="50%" style="stop-color:#16213e"/>
+      <stop offset="100%" style="stop-color:#0f3460"/>
+    </linearGradient>
+    <linearGradient id="ring1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d2ff"/>
+      <stop offset="100%" style="stop-color:#3a7bd5"/>
+    </linearGradient>
+    <linearGradient id="ring2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f857a6"/>
+      <stop offset="100%" style="stop-color:#ff5858"/>
+    </linearGradient>
+    <linearGradient id="ring3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#11998e"/>
+      <stop offset="100%" style="stop-color:#38ef7d"/>
+    </linearGradient>
+    <linearGradient id="clock" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f093fb"/>
+      <stop offset="100%" style="stop-color:#f5576c"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="250" fill="url(#bg)" filter="url(#shadow)"/>
+  <circle cx="256" cy="256" r="248" fill="none" stroke="#ffffff10" stroke-width="2"/>
+
+  <!-- Outer age ring (stale - red) -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="url(#ring2)" stroke-width="14"
+          stroke-dasharray="440 820" stroke-dashoffset="-100" stroke-linecap="round" opacity="0.9"/>
+
+  <!-- Middle age ring (aging - blue) -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="url(#ring1)" stroke-width="14"
+          stroke-dasharray="530 540" stroke-dashoffset="-80" stroke-linecap="round" opacity="0.9"/>
+
+  <!-- Inner age ring (fresh - green) -->
+  <circle cx="256" cy="256" r="140" fill="none" stroke="url(#ring3)" stroke-width="14"
+          stroke-dasharray="620 260" stroke-dashoffset="-60" stroke-linecap="round" opacity="0.9"/>
+
+  <!-- Clock face background -->
+  <circle cx="256" cy="256" r="100" fill="#1a1a2e" opacity="0.9"/>
+  <circle cx="256" cy="256" r="100" fill="none" stroke="#ffffff15" stroke-width="2"/>
+
+  <!-- Clock tick marks -->
+  <g stroke="#ffffff40" stroke-width="2" stroke-linecap="round">
+    <line x1="256" y1="164" x2="256" y2="176"/>
+    <line x1="256" y1="336" x2="256" y2="348"/>
+    <line x1="164" y1="256" x2="176" y2="256"/>
+    <line x1="336" y1="256" x2="348" y2="256"/>
+  </g>
+
+  <!-- Clock hour hand -->
+  <line x1="256" y1="256" x2="230" y2="200" stroke="url(#clock)" stroke-width="6"
+        stroke-linecap="round" filter="url(#glow)"/>
+
+  <!-- Clock minute hand -->
+  <line x1="256" y1="256" x2="290" y2="190" stroke="#ffffff" stroke-width="4"
+        stroke-linecap="round" opacity="0.9"/>
+
+  <!-- Center dot -->
+  <circle cx="256" cy="256" r="8" fill="url(#clock)"/>
+  <circle cx="256" cy="256" r="4" fill="#fff"/>
+
+  <!-- Package/dependency dots on rings -->
+  <g filter="url(#glow)">
+    <!-- Fresh dots (green ring) -->
+    <circle cx="370" cy="195" r="7" fill="#38ef7d"/>
+    <circle cx="160" cy="310" r="7" fill="#38ef7d"/>
+    <circle cx="310" cy="370" r="7" fill="#38ef7d"/>
+
+    <!-- Aging dots (blue ring) -->
+    <circle cx="130" cy="200" r="7" fill="#3a7bd5"/>
+    <circle cx="380" cy="310" r="7" fill="#00d2ff"/>
+
+    <!-- Stale dots (red ring) -->
+    <circle cx="106" cy="256" r="7" fill="#ff5858"/>
+    <circle cx="340" cy="108" r="7" fill="#f857a6"/>
+  </g>
+
+  <!-- Shield/security icon (bottom right) -->
+  <g transform="translate(370, 370) scale(0.5)">
+    <path d="M60,10 L110,30 L110,70 C110,110 60,130 60,130 C60,130 10,110 10,70 L10,30 Z"
+          fill="#f5576c" opacity="0.9"/>
+    <path d="M60,10 L110,30 L110,70 C110,110 60,130 60,130 L60,10 Z"
+          fill="#f093fb" opacity="0.5"/>
+    <text x="60" y="82" text-anchor="middle" fill="#fff" font-size="40" font-weight="bold"
+          font-family="Arial, sans-serif">!</text>
+  </g>
+
+  <!-- Text label -->
+  <text x="256" y="60" text-anchor="middle" fill="#ffffff" font-size="42" font-weight="800"
+        font-family="'SF Pro Display', 'Segoe UI', Arial, sans-serif" letter-spacing="4">
+    dep-age
+  </text>
+  <text x="256" y="90" text-anchor="middle" fill="#ffffff60" font-size="14" font-weight="400"
+        font-family="'SF Pro Display', 'Segoe UI', Arial, sans-serif" letter-spacing="2">
+    DEPENDENCY HEALTH ANALYZER
+  </text>
+</svg>

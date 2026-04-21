@@ -1,0 +1,6 @@
+requests==2.31.0
+flask==3.0.0
+# This is a comment
+numpy>=1.24.0
+-e git+https://github.com/example/pkg.git#egg=pkg
+django~=4.2.0
