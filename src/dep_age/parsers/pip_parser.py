@@ -4,12 +4,12 @@ import json
 import re
 from pathlib import Path
 
-if __import__("sys").version_info >= (3, 11):
+if __import__("sys").version_info >= (3, 11):  # pragma: no cover
     import tomllib
-else:
+else:  # pragma: no cover
     try:
         import tomllib  # type: ignore[import-not-found]
-    except ModuleNotFoundError:  # pragma: no cover
+    except ModuleNotFoundError:
         import tomli as tomllib  # type: ignore[no-redef]
 
 from dep_age.models import Dependency, Ecosystem

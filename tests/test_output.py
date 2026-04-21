@@ -5,6 +5,7 @@ from dep_age.output.badge import render_badge
 from dep_age.output.csv_output import render_csv
 from dep_age.output.json_output import render_json
 from dep_age.output.markdown_output import render_markdown
+from dep_age.output.terminal import _cve_display, render_terminal
 from dep_age.scoring.summary import HealthSummary
 
 
@@ -105,3 +106,114 @@ class TestBadge:
         out = str(tmp_path / "badge.svg")
         render_badge(_sample_summary(), output_file=out)
         assert (tmp_path / "badge.svg").exists()
+
+
+class TestTerminalOutput:
+    def test_render_terminal_with_cves(self, capsys):
+        deps = [
+            Dependency(
+                name="lodash",
+                ecosystem=Ecosystem.NPM,
+                current_version="4.17.15",
+                latest_version="4.17.21",
+                age_days=800,
+                cve_count=2,
+                cves=[
+                    CVE(
+                        id="CVE-1",
+                        severity="CRITICAL",
+                        summary="proto pollution",
+                        fixed_version="4.17.21",
+                        url="https://example.com",
+                    ),
+                    CVE(
+                        id="CVE-2",
+                        severity="HIGH",
+                        summary="injection",
+                        fixed_version="4.17.21",
+                        url="https://example.com",
+                    ),
+                ],
+                urgency=Urgency.CRITICAL,
+            ),
+            Dependency(
+                name="express",
+                ecosystem=Ecosystem.NPM,
+                current_version="4.18.0",
+                latest_version="4.19.0",
+                age_days=1200,
+                urgency=Urgency.HIGH,
+            ),
+        ]
+        summary = HealthSummary(
+            total=2,
+            fresh=0,
+            aging=0,
+            stale=2,
+            with_cves=1,
+            critical_cves=2,
+            moderate_cves=0,
+            score=30,
+        )
+        render_terminal(deps, summary, project_name="test-proj")
+
+    def test_render_terminal_no_cves(self):
+        deps = [
+            Dependency(
+                name="requests",
+                ecosystem=Ecosystem.PIP,
+                current_version="2.31.0",
+                latest_version="2.32.0",
+                age_days=100,
+                urgency=Urgency.LOW,
+            ),
+        ]
+        summary = HealthSummary(
+            total=1,
+            fresh=1,
+            aging=0,
+            stale=0,
+            with_cves=0,
+            critical_cves=0,
+            moderate_cves=0,
+            score=95,
+        )
+        render_terminal(deps, summary)
+
+    def test_cve_display_critical(self):
+        dep = Dependency(
+            name="test",
+            ecosystem=Ecosystem.NPM,
+            current_version="1.0",
+            cve_count=1,
+            cves=[CVE(id="CVE-1", severity="CRITICAL", summary="x", fixed_version=None, url="")],
+        )
+        assert "🔴" in _cve_display(dep)
+
+    def test_cve_display_high(self):
+        dep = Dependency(
+            name="test",
+            ecosystem=Ecosystem.NPM,
+            current_version="1.0",
+            cve_count=1,
+            cves=[CVE(id="CVE-1", severity="HIGH", summary="x", fixed_version=None, url="")],
+        )
+        assert "🔴" in _cve_display(dep)
+
+    def test_cve_display_moderate(self):
+        dep = Dependency(
+            name="test",
+            ecosystem=Ecosystem.NPM,
+            current_version="1.0",
+            cve_count=1,
+            cves=[CVE(id="CVE-1", severity="MEDIUM", summary="x", fixed_version=None, url="")],
+        )
+        assert "🟡" in _cve_display(dep)
+
+    def test_cve_display_none(self):
+        dep = Dependency(
+            name="test",
+            ecosystem=Ecosystem.NPM,
+            current_version="1.0",
+        )
+        assert "✅" in _cve_display(dep)

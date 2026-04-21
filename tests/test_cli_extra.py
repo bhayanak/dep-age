@@ -132,3 +132,91 @@ class TestCLIOutputFormats:
             ["scan", lockfile, "--offline", "--cves-only"],
         )
         assert result.exit_code == 0
+
+    def test_csv_format(self):
+        lockfile = os.path.join(FIXTURES_DIR, "requirements.txt")
+        result = runner.invoke(
+            app,
+            ["scan", lockfile, "--offline", "--format", "csv"],
+        )
+        assert result.exit_code == 0
+
+    def test_markdown_format(self):
+        lockfile = os.path.join(FIXTURES_DIR, "requirements.txt")
+        result = runner.invoke(
+            app,
+            ["scan", lockfile, "--offline", "--format", "markdown"],
+        )
+        assert result.exit_code == 0
+
+    def test_output_to_file(self, tmp_path: Path):
+        lockfile = os.path.join(FIXTURES_DIR, "requirements.txt")
+        out = str(tmp_path / "output.json")
+        result = runner.invoke(
+            app,
+            ["scan", lockfile, "--offline", "--format", "json", "--output", out],
+        )
+        assert result.exit_code == 0
+        assert (tmp_path / "output.json").exists()
+
+    def test_max_cves_gate_pass(self):
+        lockfile = os.path.join(FIXTURES_DIR, "requirements.txt")
+        result = runner.invoke(
+            app,
+            ["scan", lockfile, "--offline", "--max-cves", "999"],
+        )
+        # With offline + high threshold, should pass
+        assert result.exit_code == 0
+
+    def test_not_found_path(self, tmp_path: Path):
+        result = runner.invoke(
+            app,
+            ["scan", str(tmp_path / "nonexistent.lock")],
+        )
+        assert result.exit_code == 1
+        assert "Not found" in result.stdout
+
+    def test_ignore_flag(self):
+        lockfile = os.path.join(FIXTURES_DIR, "requirements.txt")
+        result = runner.invoke(
+            app,
+            ["scan", lockfile, "--offline", "--ignore", "requests,flask"],
+        )
+        assert result.exit_code == 0
+
+
+class TestParseAgeStringExtra:
+    def test_unknown_unit_fallback(self):
+        # Unknown unit should just return the number
+        assert _parse_age_string("5 foobar") == 5
+
+
+class TestBadgeWithFile:
+    def test_badge_with_file_path(self, tmp_path: Path):
+        import shutil
+
+        src = Path(FIXTURES_DIR) / "requirements.txt"
+        dst = tmp_path / "requirements.txt"
+        shutil.copy(src, dst)
+
+        out = str(tmp_path / "badge.svg")
+        result = runner.invoke(
+            app,
+            ["badge", "--output", out, str(dst)],
+        )
+        assert result.exit_code == 0
+        assert (tmp_path / "badge.svg").exists()
+
+    def test_badge_with_dir_path(self, tmp_path: Path):
+        import shutil
+
+        src = Path(FIXTURES_DIR) / "requirements.txt"
+        dst = tmp_path / "requirements.txt"
+        shutil.copy(src, dst)
+
+        out = str(tmp_path / "badge2.svg")
+        result = runner.invoke(
+            app,
+            ["badge", "--output", out, str(tmp_path)],
+        )
+        assert result.exit_code == 0

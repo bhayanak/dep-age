@@ -75,3 +75,46 @@ class TestPackageLockV1:
         names = {d.name for d in deps}
         assert "lodash" in names
         assert "express" in names
+
+
+class TestYarnLockEdgeCases:
+    def test_yarn_duplicate_name(self, tmp_path: Path):
+        content = """\
+"lodash@^4.17.0":
+  version "4.17.21"
+
+"lodash@^4.17.15":
+  version "4.17.21"
+"""
+        lockfile = tmp_path / "yarn.lock"
+        lockfile.write_text(content)
+        parser = NpmParser()
+        deps = parser.parse(lockfile)
+        # Should dedup
+        assert len(deps) == 1
+
+
+class TestPnpmEdgeCases:
+    def test_pnpm_no_at_symbol(self, tmp_path: Path):
+        data = {"packages": {"no-version-key": {}}}
+        lockfile = tmp_path / "pnpm-lock.yaml"
+        lockfile.write_text(yaml.dump(data))
+        parser = NpmParser()
+        deps = parser.parse(lockfile)
+        assert len(deps) == 0
+
+    def test_pnpm_scoped_too_few_parts(self, tmp_path: Path):
+        data = {"packages": {"/@only-scope": {}}}
+        lockfile = tmp_path / "pnpm-lock.yaml"
+        lockfile.write_text(yaml.dump(data))
+        parser = NpmParser()
+        deps = parser.parse(lockfile)
+        assert len(deps) == 0
+
+    def test_pnpm_unscoped_no_version(self, tmp_path: Path):
+        data = {"packages": {"/pkg-no-at": {}}}
+        lockfile = tmp_path / "pnpm-lock.yaml"
+        lockfile.write_text(yaml.dump(data))
+        parser = NpmParser()
+        deps = parser.parse(lockfile)
+        assert len(deps) == 0
