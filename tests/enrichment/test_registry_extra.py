@@ -97,15 +97,22 @@ class TestParseResponse:
         assert result is None
 
     def test_go_response(self):
-        text = "v1.0.0\nv1.1.0\nv1.2.0\n"
+        import json
+
+        text = json.dumps({"Version": "v1.2.0", "Time": "2024-01-15T10:00:00Z"})
         result = _parse_response(Ecosystem.GO, "example.com/pkg", text)
         assert result is not None
         assert result["latest_version"] == "v1.2.0"
+        assert "v1.2.0" in result["times"]
 
     def test_go_empty(self):
-        result = _parse_response(Ecosystem.GO, "example.com/pkg", "")
+        result = _parse_response(Ecosystem.GO, "example.com/pkg", "{}")
         assert result is not None
         assert result["latest_version"] is None
+
+    def test_go_invalid_json(self):
+        result = _parse_response(Ecosystem.GO, "test", "not json")
+        assert result is None
 
     def test_invalid_json(self):
         result = _parse_response(Ecosystem.NPM, "test", "not json")
@@ -206,3 +213,155 @@ async def test_enrich_with_cache(tmp_path):
     assert result2[0].latest_version == "4.17.21"
 
     cache.close()
+
+
+class TestGoPseudoVersionTime:
+    def test_pseudo_version(self):
+        from dep_age.enrichment.registry import _parse_go_pseudo_version_time
+
+        result = _parse_go_pseudo_version_time("v0.0.0-20180724234803-3673e40ba225")
+        assert result is not None
+        assert result.year == 2018
+        assert result.month == 7
+        assert result.day == 24
+
+    def test_tagged_version(self):
+        from dep_age.enrichment.registry import _parse_go_pseudo_version_time
+
+        result = _parse_go_pseudo_version_time("v1.19.0")
+        assert result is None
+
+    def test_pre_release_pseudo(self):
+        from dep_age.enrichment.registry import _parse_go_pseudo_version_time
+
+        result = _parse_go_pseudo_version_time("v0.0.0-20200313102051-9f266ea9e77c")
+        assert result is not None
+        assert result.year == 2020
+        assert result.month == 3
+        assert result.day == 13
+
+
+class TestGoModuleEncoding:
+    def test_uppercase_encoding(self):
+        from dep_age.enrichment.registry import _go_encode_module
+
+        assert _go_encode_module("github.com/BurntSushi/toml") == "github.com/!burnt!sushi/toml"
+
+    def test_no_uppercase(self):
+        from dep_age.enrichment.registry import _go_encode_module
+
+        assert _go_encode_module("github.com/pkg/errors") == "github.com/pkg/errors"
+
+    def test_mixed_case(self):
+        from dep_age.enrichment.registry import _go_encode_module
+
+        assert (
+            _go_encode_module("github.com/DATA-DOG/go-sqlmock")
+            == "github.com/!d!a!t!a-!d!o!g/go-sqlmock"
+        )
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_enrich_go_tagged_version():
+    dep = Dependency(
+        name="google.golang.org/grpc", ecosystem=Ecosystem.GO, current_version="v1.19.0"
+    )
+
+    # Mock @latest endpoint
+    respx.get("https://proxy.golang.org/google.golang.org/grpc/@latest").mock(
+        return_value=httpx.Response(
+            200,
+            json={"Version": "v1.72.3", "Time": "2025-04-01T00:00:00Z"},
+        )
+    )
+
+    # Mock .info for current version
+    respx.get("https://proxy.golang.org/google.golang.org/grpc/@v/v1.19.0.info").mock(
+        return_value=httpx.Response(
+            200,
+            json={"Version": "v1.19.0", "Time": "2019-02-26T00:00:00Z"},
+        )
+    )
+
+    result = await enrich_dependencies([dep])
+    d = result[0]
+    assert d.latest_version == "v1.72.3"
+    assert d.published_date is not None
+    assert d.published_date.year == 2019
+    assert d.latest_date is not None
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_enrich_go_pseudo_version():
+    dep = Dependency(
+        name="golang.org/x/net",
+        ecosystem=Ecosystem.GO,
+        current_version="v0.0.0-20180724234803-3673e40ba225",
+    )
+
+    # Mock @latest endpoint
+    respx.get("https://proxy.golang.org/golang.org/x/net/@latest").mock(
+        return_value=httpx.Response(
+            200,
+            json={"Version": "v0.16.0", "Time": "2023-10-11T00:00:00Z"},
+        )
+    )
+
+    result = await enrich_dependencies([dep])
+    d = result[0]
+    assert d.latest_version == "v0.16.0"
+    assert d.published_date is not None
+    assert d.published_date.year == 2018
+    assert d.published_date.month == 7
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_enrich_go_uppercase_module():
+    dep = Dependency(
+        name="github.com/BurntSushi/toml",
+        ecosystem=Ecosystem.GO,
+        current_version="v0.3.1",
+    )
+
+    # Module path should be encoded for proxy
+    respx.get("https://proxy.golang.org/github.com/!burnt!sushi/toml/@latest").mock(
+        return_value=httpx.Response(
+            200,
+            json={"Version": "v1.3.2", "Time": "2023-02-01T00:00:00Z"},
+        )
+    )
+
+    respx.get("https://proxy.golang.org/github.com/!burnt!sushi/toml/@v/v0.3.1.info").mock(
+        return_value=httpx.Response(
+            200,
+            json={"Version": "v0.3.1", "Time": "2018-11-05T00:00:00Z"},
+        )
+    )
+
+    result = await enrich_dependencies([dep])
+    d = result[0]
+    assert d.latest_version == "v1.3.2"
+    assert d.published_date is not None
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_enrich_go_latest_404_pseudo_fallback():
+    """When @latest returns 404, pseudo-version date should still be resolved."""
+    dep = Dependency(
+        name="example.com/unknown",
+        ecosystem=Ecosystem.GO,
+        current_version="v0.0.0-20200109180630-ec00e32a8dfd",
+    )
+
+    respx.get("https://proxy.golang.org/example.com/unknown/@latest").mock(
+        return_value=httpx.Response(404)
+    )
+
+    result = await enrich_dependencies([dep])
+    d = result[0]
+    assert d.published_date is not None
+    assert d.published_date.year == 2020

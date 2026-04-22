@@ -56,7 +56,18 @@ def _parse_lockfiles(paths: list[Path]) -> list[Dependency]:
                 deps = parser.parse(path)
                 all_deps.extend(deps)
                 break
-    return all_deps
+
+    # Deduplicate: keep first occurrence per (name, ecosystem) pair.
+    # Lock files are listed before manifests in LOCKFILE_MAP, so lock file
+    # entries win when both files are present in the same directory.
+    seen: set[tuple[str, str]] = set()
+    unique: list[Dependency] = []
+    for dep in all_deps:
+        key = (dep.name, dep.ecosystem.value)
+        if key not in seen:
+            seen.add(key)
+            unique.append(dep)
+    return unique
 
 
 def _filter_deps(deps: list[Dependency], cfg: Config) -> list[Dependency]:

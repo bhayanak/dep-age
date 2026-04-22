@@ -220,3 +220,34 @@ class TestBadgeWithFile:
             ["badge", "--output", out, str(tmp_path)],
         )
         assert result.exit_code == 0
+
+
+class TestDeduplication:
+    def test_dedup_go_sum_and_mod(self, tmp_path: Path):
+        """When both go.sum and go.mod are present, deps should be deduplicated."""
+        go_sum = tmp_path / "go.sum"
+        go_sum.write_text(
+            "github.com/pkg/errors v0.9.1 h1:abc=\ngolang.org/x/text v0.14.0 h1:xyz=\n"
+        )
+        go_mod = tmp_path / "go.mod"
+        go_mod.write_text(
+            "module example.com/mymod\n\ngo 1.21\n\n"
+            "require (\n"
+            "\tgithub.com/pkg/errors v0.9.1\n"
+            "\tgolang.org/x/text v0.14.0\n"
+            ")\n"
+        )
+
+        result = runner.invoke(
+            app,
+            ["scan", str(tmp_path), "--offline", "--format", "json"],
+        )
+        assert result.exit_code == 0
+        # Find JSON portion
+        lines = result.stdout.strip().split("\n")
+        json_start = next(i for i, line in enumerate(lines) if line.strip().startswith("{"))
+        data = json.loads("\n".join(lines[json_start:]))
+        names = [d["name"] for d in data["dependencies"]]
+        # Each dep should appear only once
+        assert names.count("github.com/pkg/errors") == 1
+        assert names.count("golang.org/x/text") == 1

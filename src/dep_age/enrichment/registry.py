@@ -4,6 +4,8 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
+from datetime import datetime, timezone
 
 import httpx
 from dateutil.parser import parse as parse_date
@@ -19,10 +21,57 @@ REGISTRY_URLS: dict[Ecosystem, str] = {
     Ecosystem.NPM: "https://registry.npmjs.org/{name}",
     Ecosystem.PIP: "https://pypi.org/pypi/{name}/json",
     Ecosystem.GEM: "https://rubygems.org/api/v1/versions/{name}.json",
-    Ecosystem.GO: "https://proxy.golang.org/{name}/@v/list",
+    Ecosystem.GO: "https://proxy.golang.org/{name}/@latest",
     Ecosystem.CARGO: "https://crates.io/api/v1/crates/{name}",
     Ecosystem.COMPOSER: "https://repo.packagist.org/p2/{name}.json",
 }
+
+# Go pseudo-version pattern: v0.0.0-YYYYMMDDHHMMSS-abcdef123456
+_GO_PSEUDO_RE = re.compile(r"v\d+\.\d+\.\d+-(\d{14})-[0-9a-f]+")
+
+
+def _go_encode_module(path: str) -> str:
+    """Encode a Go module path for proxy.golang.org (uppercase → !lowercase)."""
+    return re.sub(r"[A-Z]", lambda m: "!" + m.group(0).lower(), path)
+
+
+def _parse_go_pseudo_version_time(version: str) -> datetime | None:
+    """Extract timestamp from Go pseudo-version string."""
+    m = _GO_PSEUDO_RE.match(version)
+    if not m:
+        return None
+    ts = m.group(1)  # YYYYMMDDHHMMSS
+    try:
+        return datetime(
+            int(ts[:4]),
+            int(ts[4:6]),
+            int(ts[6:8]),
+            int(ts[8:10]),
+            int(ts[10:12]),
+            int(ts[12:14]),
+            tzinfo=timezone.utc,
+        )
+    except (ValueError, IndexError):
+        return None
+
+
+async def _fetch_go_version_info(
+    client: httpx.AsyncClient,
+    semaphore: asyncio.Semaphore,
+    module: str,
+    version: str,
+) -> str | None:
+    """Fetch publish time for a specific Go module version via proxy.golang.org."""
+    url = f"https://proxy.golang.org/{_go_encode_module(module)}/@v/{version}.info"
+    try:
+        async with semaphore:
+            resp = await client.get(url, timeout=15.0)
+        if resp.status_code == 200:
+            data = json.loads(resp.text)
+            return data.get("Time")
+    except (httpx.HTTPError, json.JSONDecodeError, Exception) as exc:
+        logger.debug("Go version info fetch failed for %s@%s: %s", module, version, exc)
+    return None
 
 
 async def fetch_registry_info(
@@ -42,16 +91,47 @@ async def fetch_registry_info(
     if not url_template:
         return dep
 
-    url = url_template.format(name=dep.name)
+    name = _go_encode_module(dep.name) if dep.ecosystem == Ecosystem.GO else dep.name
+    url = url_template.format(name=name)
 
     try:
         async with semaphore:
             resp = await client.get(url, timeout=15.0)
         if resp.status_code != 200:
             logger.debug("Registry returned %d for %s", resp.status_code, dep.name)
+            # For Go, still try to resolve date from pseudo-version
+            if dep.ecosystem == Ecosystem.GO:
+                pdt = _parse_go_pseudo_version_time(dep.current_version)
+                if pdt:
+                    dep.published_date = pdt
             return dep
 
         data = _parse_response(dep.ecosystem, dep.name, resp.text)
+
+        # For Go, enrich with per-version timestamps
+        if data and dep.ecosystem == Ecosystem.GO:
+            # Try pseudo-version extraction first (no network call needed)
+            pdt = _parse_go_pseudo_version_time(dep.current_version)
+            if pdt:
+                data.setdefault("times", {})[dep.current_version] = pdt.isoformat()
+            else:
+                # Fetch .info for current version
+                ts = await _fetch_go_version_info(client, semaphore, dep.name, dep.current_version)
+                if ts:
+                    data.setdefault("times", {})[dep.current_version] = ts
+
+            # Latest version time from @latest response is already set
+            # If latest is different from current, and we don't have its time, fetch it
+            latest = data.get("latest_version")
+            if latest and latest not in data.get("times", {}):
+                lpdt = _parse_go_pseudo_version_time(latest)
+                if lpdt:
+                    data.setdefault("times", {})[latest] = lpdt.isoformat()
+                else:
+                    lts = await _fetch_go_version_info(client, semaphore, dep.name, latest)
+                    if lts:
+                        data.setdefault("times", {})[latest] = lts
+
         if data and cache:
             cache.set(cache_key, json.dumps(data))
         if data:
@@ -128,10 +208,14 @@ def _parse_response(ecosystem: Ecosystem, name: str, text: str) -> dict | None:
             return {"latest_version": latest, "times": times}
 
         if ecosystem == Ecosystem.GO:
-            # proxy.golang.org/@v/list returns newline-separated versions
-            versions = [v.strip() for v in text.splitlines() if v.strip()]
-            latest = versions[-1] if versions else None
-            return {"latest_version": latest, "times": {}}
+            # proxy.golang.org/@latest returns JSON: {"Version": "v1.2.0", "Time": "..."}
+            data = json.loads(text)
+            latest = data.get("Version")
+            times: dict[str, str] = {}
+            t = data.get("Time")
+            if latest and t:
+                times[latest] = t
+            return {"latest_version": latest, "times": times}
 
     except (json.JSONDecodeError, KeyError, IndexError) as exc:
         logger.debug("Failed to parse registry response for %s: %s", name, exc)
