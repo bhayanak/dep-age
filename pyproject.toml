@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dep-age"
-version = "1.0.0"
+version = "1.0.1"
 description = "Cross-language dependency age analyzer — scan lock files for staleness, CVEs, and update urgency"
 readme = "README.md"
 license = "MIT"
