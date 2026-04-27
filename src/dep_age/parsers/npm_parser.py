@@ -163,6 +163,7 @@ class NpmParser(BaseParser):
                         ecosystem=Ecosystem.NPM,
                         current_version=version or "*",
                         is_direct=section == "dependencies",
+                        version_constraint=version_spec if version_spec != version else None,
                     )
                 )
         return deps

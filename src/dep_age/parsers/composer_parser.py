@@ -61,6 +61,7 @@ class ComposerParser(BaseParser):
                         ecosystem=Ecosystem.COMPOSER,
                         current_version=version or "*",
                         is_direct=section == "require",
+                        version_constraint=version_spec if version_spec != version else None,
                     )
                 )
         return deps

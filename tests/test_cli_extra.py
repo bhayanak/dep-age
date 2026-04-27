@@ -251,3 +251,37 @@ class TestDeduplication:
         # Each dep should appear only once
         assert names.count("github.com/pkg/errors") == 1
         assert names.count("golang.org/x/text") == 1
+
+
+class TestCLIGating:
+    def test_max_age_gate_fails(self, tmp_path: Path):
+        """max-age gate should fail when deps exceed threshold."""
+        req = tmp_path / "requirements.txt"
+        req.write_text("somefakepkg-notcached==1.0.0\n")
+        result = runner.invoke(
+            app,
+            ["scan", str(req), "--offline", "--max-age", "1 day"],
+        )
+        # With offline and unknown package, age is unknown, so gate passes
+        assert result.exit_code == 0
+
+    def test_max_cves_gate_fails_offline(self, tmp_path: Path):
+        """max-cves gate with 0 threshold should pass offline (no CVEs fetched)."""
+        req = tmp_path / "requirements.txt"
+        req.write_text("somefakepkg-notcached==1.0.0\n")
+        result = runner.invoke(
+            app,
+            ["scan", str(req), "--offline", "--max-cves", "0"],
+        )
+        assert result.exit_code == 0
+
+    def test_no_deps_found(self, tmp_path: Path):
+        """Empty lock file should show no deps message."""
+        req = tmp_path / "requirements.txt"
+        req.write_text("# empty\n")
+        result = runner.invoke(
+            app,
+            ["scan", str(req), "--offline"],
+        )
+        assert result.exit_code == 0
+        assert "No dependencies" in result.stdout

@@ -243,9 +243,124 @@ def _find_version_time(version: str, times: dict[str, str]) -> str | None:
     return None
 
 
+def _resolve_manifest_version(dep: Dependency, times: dict[str, str]) -> str:
+    """For manifest deps with version constraints, resolve to the latest satisfying version."""
+    if not dep.version_constraint or not times:
+        return dep.current_version
+
+    constraint = dep.version_constraint.strip()
+
+    # Parse constraints like ">=0.9,<1.0" or "^4.17.0" or "~2.0"
+    specs = _parse_constraints(constraint, dep.ecosystem)
+    if not specs:
+        return dep.current_version
+
+    # Sort available versions, pick latest that satisfies all constraints
+    available = sorted(times.keys(), key=_version_sort_key, reverse=True)
+    for ver in available:
+        if _satisfies_all(ver, specs):
+            return ver
+
+    return dep.current_version
+
+
+def _version_sort_key(v: str) -> tuple:
+    """Sort key for version strings — extract numeric parts."""
+    v = v.lstrip("v")
+    parts = re.split(r"[-+]", v, maxsplit=1)[0]  # strip pre-release
+    segments = []
+    for p in parts.split("."):
+        try:
+            segments.append(int(p))
+        except ValueError:
+            segments.append(0)
+    return tuple(segments)
+
+
+def _parse_constraints(constraint: str, ecosystem: Ecosystem) -> list[tuple[str, tuple]] | None:
+    """Parse version constraint string into a list of (operator, version_tuple) pairs."""
+    specs: list[tuple[str, tuple]] = []
+
+    # Handle caret (^) and tilde (~) for npm/cargo
+    if constraint.startswith("^"):
+        ver = constraint[1:].strip()
+        parts = _version_sort_key(ver)
+        # ^1.2.3 means >=1.2.3, <2.0.0; ^0.2.3 means >=0.2.3, <0.3.0
+        if parts[0] > 0:
+            upper = (parts[0] + 1,)
+        elif len(parts) > 1 and parts[1] > 0:
+            upper = (0, parts[1] + 1)
+        else:
+            upper = (0, 0, (parts[2] + 1) if len(parts) > 2 else 1)
+        specs.append((">=", parts))
+        specs.append(("<", upper))
+        return specs
+
+    if constraint.startswith("~") and not constraint.startswith("~="):
+        ver = constraint[1:].strip()
+        parts = _version_sort_key(ver)
+        # ~1.2.3 means >=1.2.3, <1.3.0
+        upper = (parts[0], parts[1] + 1) if len(parts) >= 2 else (parts[0] + 1,)
+        specs.append((">=", parts))
+        specs.append(("<", upper))
+        return specs
+
+    # Handle ~= (compatible release) for pip
+    if "~=" in constraint:
+        ver = constraint.replace("~=", "").strip()
+        parts = _version_sort_key(ver)
+        upper = (parts[0], parts[1] + 1) if len(parts) >= 2 else (parts[0] + 1,)
+        specs.append((">=", parts))
+        specs.append(("<", upper))
+        return specs
+
+    # Handle comma-separated constraints: >=0.9,<1.0
+    for part in constraint.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        m = re.match(r"^([><=!~^]+)\s*(.+)$", part)
+        if m:
+            op = m.group(1).strip()
+            ver = m.group(2).strip()
+            specs.append((op, _version_sort_key(ver)))
+
+    return specs if specs else None
+
+
+def _satisfies_all(version: str, specs: list[tuple[str, tuple]]) -> bool:
+    """Check if a version satisfies all constraint specs."""
+    # Skip pre-release/rc versions
+    v_lower = version.lower()
+    if any(tag in v_lower for tag in ("rc", "alpha", "beta", "dev", "pre")):
+        return False
+
+    vt = _version_sort_key(version)
+    for op, spec in specs:
+        if op == ">=" and not (vt >= spec):
+            return False
+        if op == ">" and not (vt > spec):
+            return False
+        if op == "<=" and not (vt <= spec):
+            return False
+        if op == "<" and not (vt < spec):
+            return False
+        if op == "==" and vt != spec:
+            return False
+        if op == "!=" and vt == spec:
+            return False
+    return True
+
+
 def _apply_registry_data(dep: Dependency, data: dict) -> Dependency:
     dep.latest_version = data.get("latest_version") or dep.latest_version
     times: dict[str, str] = data.get("times", {})
+
+    # For manifest deps with constraints, resolve to latest satisfying version
+    if dep.version_constraint and times:
+        resolved = _resolve_manifest_version(dep, times)
+        if resolved != dep.current_version:
+            dep.current_version = resolved
 
     ts = _find_version_time(dep.current_version, times)
     if ts:

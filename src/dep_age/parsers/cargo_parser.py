@@ -77,20 +77,22 @@ class CargoParser(BaseParser):
                     continue
                 seen.add(name)
                 if isinstance(spec, str):
+                    raw_constraint = spec
                     version = re.sub(r"^[\^~>=<*= ]+", "", spec).split(",")[0].strip()
                 elif isinstance(spec, dict):
-                    version = (
-                        re.sub(r"^[\^~>=<*= ]+", "", spec.get("version", "")).split(",")[0].strip()
-                    )
+                    raw_constraint = spec.get("version", "")
+                    version = re.sub(r"^[\^~>=<*= ]+", "", raw_constraint).split(",")[0].strip()
                 else:
                     continue
                 if version:
+                    has_constraint = raw_constraint != version
                     deps.append(
                         Dependency(
                             name=name,
                             ecosystem=Ecosystem.CARGO,
                             current_version=version,
                             is_direct=section == "dependencies",
+                            version_constraint=raw_constraint if has_constraint else None,
                         )
                     )
         return deps

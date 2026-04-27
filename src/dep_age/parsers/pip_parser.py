@@ -84,10 +84,11 @@ class PipParser(BaseParser):
 
         # [project.dependencies]
         for req in data.get("project", {}).get("dependencies", []):
-            match = re.match(r"^([A-Za-z0-9_][A-Za-z0-9._-]*)\s*([=~!<>]=?\s*[^\s,;]+)?", req)
+            match = re.match(r"^([A-Za-z0-9_][A-Za-z0-9._-]*)\s*(.*?)(?:;.*)?$", req.strip())
             if match:
                 name = match.group(1).lower()
-                version = (match.group(2) or "").strip().lstrip("=~!<> ")
+                constraint = match.group(2).strip()
+                version = re.sub(r"^[=~!<>]+\s*", "", constraint).split(",")[0].strip()
                 if name not in seen:
                     seen.add(name)
                     deps.append(
@@ -96,16 +97,18 @@ class PipParser(BaseParser):
                             ecosystem=Ecosystem.PIP,
                             current_version=version or "*",
                             is_direct=True,
+                            version_constraint=constraint or None,
                         )
                     )
 
         # [project.optional-dependencies]
         for group_deps in data.get("project", {}).get("optional-dependencies", {}).values():
             for req in group_deps:
-                match = re.match(r"^([A-Za-z0-9_][A-Za-z0-9._-]*)\s*([=~!<>]=?\s*[^\s,;]+)?", req)
+                match = re.match(r"^([A-Za-z0-9_][A-Za-z0-9._-]*)\s*(.*?)(?:;.*)?$", req.strip())
                 if match:
                     name = match.group(1).lower()
-                    version = (match.group(2) or "").strip().lstrip("=~!<> ")
+                    constraint = match.group(2).strip()
+                    version = re.sub(r"^[=~!<>]+\s*", "", constraint).split(",")[0].strip()
                     if name not in seen:
                         seen.add(name)
                         deps.append(
@@ -114,6 +117,7 @@ class PipParser(BaseParser):
                                 ecosystem=Ecosystem.PIP,
                                 current_version=version or "*",
                                 is_direct=True,
+                                version_constraint=constraint or None,
                             )
                         )
 

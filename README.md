@@ -15,6 +15,7 @@
   <a href="https://pypi.org/project/dep-age/"><img src="https://img.shields.io/pypi/pyversions/dep-age" alt="Python"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
   <a href="https://github.com/bhayanak/dep-age/releases"><img src="https://img.shields.io/github/v/release/bhayanak/dep-age?include_prereleases&label=release" alt="Release"></a>
+  <a href="https://github.com/bhayanak/dep-age/releases"><img src="dep-badge.svg" alt="Dependency Freshness"></a>
 </p>
 
 <p align="center">
@@ -95,44 +96,43 @@ Options:
 ## what it shows?
 Below is **scan of current repo**:
 ```
-$ dep-age scan .                                        
+$ dep-age scan .
 Found 1 lock file(s): pyproject.toml
 Parsed 12 dependencies
 ╭───────────────────────────────────────╮
 │ 📦 dep-age · Dependency Health Report │
-│ dep-age  ·  Score: 57/100             │
+│ dep-age  ·  Score: 87/100             │
 │ 1 ecosystem(s)  ·  12 dependencies    │
 ╰───────────────────────────────────────╯
 
-                            pip — 12 deps                            
-┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━┳━━━━━━━━━┓
-┃ Package         ┃ Current ┃ Latest      ┃ Age    ┃ CVEs ┃ Urgency ┃
-┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━╇━━━━━━━━━┩
-│ python-dateutil │ 2.8     │ 2.9.0.post0 │ 7y 2m  │ 0 ✅ │ HIGH    │
-│ pyyaml          │ 6.0     │ 6.0.3       │ 4y 6m  │ 0 ✅ │ HIGH    │
-│ tomli           │ 2.0     │ 2.4.1       │ 4y 4m  │ 0 ✅ │ HIGH    │
-│ rich            │ 13.0    │ 15.0.0      │ 3y 3m  │ 0 ✅ │ HIGH    │
-│ typer           │ 0.9     │ 0.24.1      │ 2y 11m │ 0 ✅ │ HIGH    │
-│ pytest-asyncio  │ 0.23    │ 1.3.0       │ 2y 4m  │ 0 ✅ │ HIGH    │
-│ httpx           │ 0.27    │ 0.28.1      │ 2y 2m  │ 0 ✅ │ HIGH    │
-│ respx           │ 0.21    │ 0.23.1      │ 2y 1m  │ 0 ✅ │ HIGH    │
-│ pytest-cov      │ 5.0     │ 7.1.0       │ 2y     │ 0 ✅ │ HIGH    │
-│ ruff            │ 0.4     │ 0.15.11     │ 2y     │ 0 ✅ │ HIGH    │
-│ diskcache       │ 5.6.3   │ 5.6.3       │ 2y 7m  │ 1 🟡 │ MEDIUM  │
-│ pytest          │ 8.3     │ 9.0.3       │ 1y 9m  │ 1 🟡 │ MEDIUM  │
-└─────────────────┴─────────┴─────────────┴────────┴──────┴─────────┘
+                             pip — 12 deps
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━━━━┓
+┃ Package         ┃ Current     ┃ Latest      ┃ Age   ┃ CVEs ┃ Urgency ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━━━━┩
+│ diskcache       │ 5.6.3       │ 5.6.3       │ 2y 8m │ 1 🟡 │ MEDIUM  │
+│ python-dateutil │ 2.9.0.post0 │ 2.9.0.post0 │ 2y 1m │ 0 ✅ │ MEDIUM  │
+│ rich            │ 13.9.4      │ 15.0.0      │ 1y 5m │ 0 ✅ │ MEDIUM  │
+│ httpx           │ 0.28.1      │ 0.28.1      │ 1y 4m │ 0 ✅ │ LOW     │
+│ pyyaml          │ 6.0.3       │ 6.0.3       │ 7m    │ 0 ✅ │ LOW     │
+│ pytest-cov      │ 7.1.0       │ 7.1.0       │ 1m    │ 0 ✅ │ NONE    │
+│ tomli           │ 2.4.1       │ 2.4.1       │ 1m    │ 0 ✅ │ NONE    │
+│ pytest-asyncio  │ 1.4.0a0     │ 1.3.0       │ 1m    │ 0 ✅ │ LOW     │
+│ pytest          │ 9.0.3       │ 9.0.3       │ 19d   │ 0 ✅ │ NONE    │
+│ respx           │ 0.23.1      │ 0.23.1      │ 18d   │ 0 ✅ │ NONE    │
+│ ruff            │ 0.15.12     │ 0.15.12     │ 2d    │ 0 ✅ │ NONE    │
+│ typer           │ 0.25.0      │ 0.25.0      │ 1d    │ 0 ✅ │ NONE    │
+└─────────────────┴─────────────┴─────────────┴───────┴──────┴─────────┘
 
 Summary:
   📊 Total: 12 deps across 1 ecosystem(s)
-  🟢 Fresh (<6 months): 0 (0%)
-  🟡 Aging (6m-2y): 1 (8%)
-  🔴 Stale (>2 years): 11 (91%)
-  🔒 CVEs found: 2 (0 critical, 2 moderate)
+  🟢 Fresh (<6 months): 7 (58%)
+  🟡 Aging (6m-2y): 3 (25%)
+  🔴 Stale (>2 years): 2 (16%)
+  🔒 CVEs found: 1 (0 critical, 1 moderate)
 
 💡 Recommendations:
   1. UPDATE IMMEDIATELY: diskcache 5.6.3 → 5.6.3 (1 CVE(s))
-  2. UPDATE IMMEDIATELY: pytest 8.3 → 9.0.3 (1 CVE(s))
-  3. Plan update: 11 stale dependencies (>2 years old)
+  2. Plan update: 2 stale dependencies (>2 years old)
 ```
 
 ## CI Integration

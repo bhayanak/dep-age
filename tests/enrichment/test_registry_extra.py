@@ -9,7 +9,11 @@ import respx
 from dep_age.enrichment.registry import (
     _apply_registry_data,
     _find_version_time,
+    _parse_constraints,
     _parse_response,
+    _resolve_manifest_version,
+    _satisfies_all,
+    _version_sort_key,
     enrich_dependencies,
 )
 from dep_age.models import Dependency, Ecosystem
@@ -365,3 +369,265 @@ async def test_enrich_go_latest_404_pseudo_fallback():
     d = result[0]
     assert d.published_date is not None
     assert d.published_date.year == 2020
+
+
+class TestVersionSortKey:
+    def test_simple(self):
+        assert _version_sort_key("1.2.3") == (1, 2, 3)
+
+    def test_with_v_prefix(self):
+        assert _version_sort_key("v2.0.0") == (2, 0, 0)
+
+    def test_pre_release_stripped(self):
+        assert _version_sort_key("1.0.0-rc1") == (1, 0, 0)
+
+    def test_two_part(self):
+        assert _version_sort_key("3.5") == (3, 5)
+
+    def test_non_numeric(self):
+        assert _version_sort_key("abc") == (0,)
+
+    def test_sorting(self):
+        versions = ["0.9.0", "0.25.0", "0.12.0", "1.0.0"]
+        result = sorted(versions, key=_version_sort_key)
+        assert result == ["0.9.0", "0.12.0", "0.25.0", "1.0.0"]
+
+
+class TestParseConstraints:
+    def test_caret(self):
+        specs = _parse_constraints("^1.2.3", Ecosystem.NPM)
+        assert specs is not None
+        assert len(specs) == 2
+        assert specs[0] == (">=", (1, 2, 3))
+        assert specs[1] == ("<", (2,))
+
+    def test_caret_zero_major(self):
+        specs = _parse_constraints("^0.2.3", Ecosystem.NPM)
+        assert specs is not None
+        assert specs[1] == ("<", (0, 3))
+
+    def test_tilde(self):
+        specs = _parse_constraints("~1.2.3", Ecosystem.NPM)
+        assert specs is not None
+        assert specs[0] == (">=", (1, 2, 3))
+        assert specs[1] == ("<", (1, 3))
+
+    def test_compatible_release(self):
+        specs = _parse_constraints("~=2.5", Ecosystem.PIP)
+        assert specs is not None
+        assert specs[0] == (">=", (2, 5))
+        assert specs[1] == ("<", (2, 6))
+
+    def test_comma_separated(self):
+        specs = _parse_constraints(">=0.9,<1.0", Ecosystem.PIP)
+        assert specs is not None
+        assert len(specs) == 2
+        assert specs[0] == (">=", (0, 9))
+        assert specs[1] == ("<", (1, 0))
+
+    def test_empty_returns_none(self):
+        assert _parse_constraints("", Ecosystem.PIP) is None
+
+    def test_single_ge(self):
+        specs = _parse_constraints(">=2.0", Ecosystem.PIP)
+        assert specs is not None
+        assert specs[0] == (">=", (2, 0))
+
+
+class TestSatisfiesAll:
+    def test_within_range(self):
+        specs = [(">=", (0, 9)), ("<", (1, 0))]
+        assert _satisfies_all("0.25.0", specs) is True
+
+    def test_below_range(self):
+        specs = [(">=", (0, 9)), ("<", (1, 0))]
+        assert _satisfies_all("0.8.0", specs) is False
+
+    def test_above_range(self):
+        specs = [(">=", (0, 9)), ("<", (1, 0))]
+        assert _satisfies_all("1.0.0", specs) is False
+
+    def test_exact_lower_bound(self):
+        specs = [(">=", (2, 0)), ("<", (3, 0))]
+        assert _satisfies_all("2.0.0", specs) is True
+
+    def test_skips_prerelease(self):
+        specs = [(">=", (1, 0))]
+        assert _satisfies_all("2.0.0-rc1", specs) is False
+        assert _satisfies_all("2.0.0-alpha", specs) is False
+        assert _satisfies_all("2.0.0-beta.1", specs) is False
+
+    def test_equality(self):
+        specs = [("==", (1, 5, 0))]
+        assert _satisfies_all("1.5.0", specs) is True
+        assert _satisfies_all("1.6.0", specs) is False
+
+    def test_not_equal(self):
+        specs = [("!=", (1, 0, 0)), (">=", (0, 9))]
+        assert _satisfies_all("1.0.0", specs) is False
+        assert _satisfies_all("1.1.0", specs) is True
+
+    def test_greater_than(self):
+        specs = [(">", (1, 0, 0))]
+        assert _satisfies_all("1.0.0", specs) is False
+        assert _satisfies_all("1.0.1", specs) is True
+
+    def test_less_equal(self):
+        specs = [("<=", (2, 0, 0))]
+        assert _satisfies_all("2.0.0", specs) is True
+        assert _satisfies_all("2.0.1", specs) is False
+
+
+class TestResolveManifestVersion:
+    def test_resolves_to_latest_satisfying(self):
+        dep = Dependency(
+            name="typer",
+            ecosystem=Ecosystem.PIP,
+            current_version="0.9",
+            version_constraint=">=0.9,<1.0",
+        )
+        times = {
+            "0.9.0": "2023-06-15T00:00:00Z",
+            "0.12.0": "2023-12-01T00:00:00Z",
+            "0.25.0": "2024-10-01T00:00:00Z",
+            "1.0.0": "2025-01-01T00:00:00Z",
+        }
+        result = _resolve_manifest_version(dep, times)
+        assert result == "0.25.0"
+
+    def test_no_constraint_returns_current(self):
+        dep = Dependency(
+            name="test",
+            ecosystem=Ecosystem.PIP,
+            current_version="1.0.0",
+        )
+        result = _resolve_manifest_version(dep, {"1.0.0": "2023-01-01"})
+        assert result == "1.0.0"
+
+    def test_empty_times_returns_current(self):
+        dep = Dependency(
+            name="test",
+            ecosystem=Ecosystem.PIP,
+            current_version="1.0.0",
+            version_constraint=">=1.0",
+        )
+        result = _resolve_manifest_version(dep, {})
+        assert result == "1.0.0"
+
+    def test_caret_constraint(self):
+        dep = Dependency(
+            name="lodash",
+            ecosystem=Ecosystem.NPM,
+            current_version="4.17.0",
+            version_constraint="^4.17.0",
+        )
+        times = {
+            "4.17.0": "2020-01-01T00:00:00Z",
+            "4.17.21": "2021-02-20T00:00:00Z",
+            "5.0.0": "2025-01-01T00:00:00Z",
+        }
+        result = _resolve_manifest_version(dep, times)
+        assert result == "4.17.21"
+
+    def test_apply_registry_data_uses_resolved_version(self):
+        dep = Dependency(
+            name="typer",
+            ecosystem=Ecosystem.PIP,
+            current_version="0.9",
+            version_constraint=">=0.9,<1.0",
+        )
+        data = {
+            "latest_version": "0.25.0",
+            "times": {
+                "0.9.0": "2023-06-15T00:00:00Z",
+                "0.25.0": "2024-10-01T00:00:00Z",
+            },
+        }
+        result = _apply_registry_data(dep, data)
+        assert result.current_version == "0.25.0"
+        assert result.published_date is not None
+        assert result.published_date.year == 2024
+
+
+class TestResolveManifestVersionEdgeCases:
+    def test_unparseable_constraint_returns_current(self):
+        dep = Dependency(
+            name="test",
+            ecosystem=Ecosystem.PIP,
+            current_version="1.0.0",
+            version_constraint="",
+        )
+        result = _resolve_manifest_version(dep, {"1.0.0": "2023-01-01"})
+        assert result == "1.0.0"
+
+    def test_no_version_satisfies_returns_current(self):
+        dep = Dependency(
+            name="test",
+            ecosystem=Ecosystem.NPM,
+            current_version="1.0.0",
+            version_constraint=">=5.0",
+        )
+        times = {"1.0.0": "2023-01-01", "2.0.0": "2024-01-01"}
+        result = _resolve_manifest_version(dep, times)
+        assert result == "1.0.0"
+
+
+class TestParseConstraintsEdgeCases:
+    def test_caret_zero_zero(self):
+        """^0.0.3 means >=0.0.3, <0.0.4"""
+        specs = _parse_constraints("^0.0.3", Ecosystem.NPM)
+        assert specs is not None
+        assert specs[0] == (">=", (0, 0, 3))
+        assert specs[1] == ("<", (0, 0, 4))
+
+    def test_caret_zero_zero_no_patch(self):
+        """^0.0 means >=0.0, <0.0.1"""
+        specs = _parse_constraints("^0.0", Ecosystem.NPM)
+        assert specs is not None
+        assert specs[1] == ("<", (0, 0, 1))
+
+    def test_tilde_single_part(self):
+        """~1 means >=1, <2"""
+        specs = _parse_constraints("~1", Ecosystem.NPM)
+        assert specs is not None
+        assert specs[0] == (">=", (1,))
+        assert specs[1] == ("<", (2,))
+
+
+class TestGoRegistryEdgeCases:
+    """Cover Go-specific branches: pseudo fallback on 404, version info fetch errors."""
+
+    @staticmethod
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_go_latest_pseudo_version_fetch():
+        """When latest itself is a pseudo-version, its date should be extracted."""
+        dep = Dependency(
+            name="example.com/mod",
+            ecosystem=Ecosystem.GO,
+            current_version="v1.0.0",
+        )
+
+        # @latest returns a pseudo-version as the latest
+        respx.get("https://proxy.golang.org/example.com/mod/@latest").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "Version": "v0.0.0-20210101120000-abcdef123456",
+                    "Time": "2021-01-01T12:00:00Z",
+                },
+            )
+        )
+
+        # .info for current version
+        respx.get("https://proxy.golang.org/example.com/mod/@v/v1.0.0.info").mock(
+            return_value=httpx.Response(
+                200,
+                json={"Version": "v1.0.0", "Time": "2020-06-01T00:00:00Z"},
+            )
+        )
+
+        result = await enrich_dependencies([dep])
+        d = result[0]
+        assert d.published_date is not None
+        assert d.latest_date is not None

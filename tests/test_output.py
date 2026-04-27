@@ -107,6 +107,62 @@ class TestBadge:
         render_badge(_sample_summary(), output_file=out)
         assert (tmp_path / "badge.svg").exists()
 
+    def test_render_badge_yellow(self):
+        summary = HealthSummary(
+            total=10,
+            fresh=3,
+            aging=4,
+            stale=3,
+            with_cves=2,
+            critical_cves=0,
+            moderate_cves=2,
+            score=65,
+        )
+        svg = render_badge(summary)
+        assert "#dfb317" in svg  # yellow
+
+    def test_render_badge_green(self):
+        summary = HealthSummary(
+            total=10,
+            fresh=9,
+            aging=1,
+            stale=0,
+            with_cves=0,
+            critical_cves=0,
+            moderate_cves=0,
+            score=90,
+        )
+        svg = render_badge(summary)
+        assert "#4c1" in svg  # green
+
+    def test_render_badge_orange(self):
+        summary = HealthSummary(
+            total=10,
+            fresh=1,
+            aging=2,
+            stale=7,
+            with_cves=5,
+            critical_cves=3,
+            moderate_cves=2,
+            score=45,
+        )
+        svg = render_badge(summary)
+        assert "#fe7d37" in svg  # orange
+
+    def test_render_badge_red(self):
+        summary = HealthSummary(
+            total=10,
+            fresh=0,
+            aging=1,
+            stale=9,
+            with_cves=8,
+            critical_cves=6,
+            moderate_cves=2,
+            score=20,
+        )
+        svg = render_badge(summary)
+        assert "#e05d44" in svg  # red
+
 
 class TestTerminalOutput:
     def test_render_terminal_with_cves(self, capsys):

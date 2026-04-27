@@ -44,6 +44,7 @@ class Dependency:
     cves: list[CVE] = field(default_factory=list)
     urgency: Urgency = Urgency.NONE
     is_direct: bool = True
+    version_constraint: str | None = None  # raw constraint from manifests, e.g. ">=0.9,<1.0"
 
 
 @dataclass
